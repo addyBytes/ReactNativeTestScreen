@@ -19,6 +19,8 @@ import SearchScreen from '../pages/SearchScreen';
 import ChatScreen from '../pages/ChatScreen';
 import { useTheme } from '../theme/ThemeContext';
 import BottomGradient from './BottomGradient';
+import VideoCallScreen from '../pages/VideoCallScreen';
+import CallScreen from '../pages/CallScreen';
 
 const Tab = createBottomTabNavigator();
 const { width } = Dimensions.get('window');
@@ -35,24 +37,12 @@ function GlassTabBar({ state, navigation }: any) {
 
   const translateX = useRef(new Animated.Value(0)).current;
 
-  /* ---------------------------------- */
-  /* ANDROID SYSTEM NAVIGATION CONTROL */
-  /* ---------------------------------- */
-
   useEffect(() => {
     if (Platform.OS === 'android') {
-      if (theme.mode === 'dark') {
-        SystemNavigationBar.setNavigationColor('transparent', 'light');
-      } else {
-        SystemNavigationBar.setNavigationColor('transparent', 'dark');
-      }
-      if (theme.mode === 'dark')
-        SystemNavigationBar.setBarMode('light', 'navigation');
-      else SystemNavigationBar.setBarMode('dark', 'navigation');
+      SystemNavigationBar.setNavigationColor('transparent', theme.mode === 'dark' ? 'light' : 'dark');
+      SystemNavigationBar.setBarMode(theme.mode === 'dark' ? 'light' : 'dark', 'navigation');
     }
   }, [theme.mode]);
-
-  /* ---------------------------------- */
 
   useEffect(() => {
     Animated.spring(translateX, {
@@ -63,7 +53,6 @@ function GlassTabBar({ state, navigation }: any) {
 
   const getIcon = (routeName: string, isFocused: boolean) => {
     const inactiveColor = theme.mode === 'dark' ? '#ffffff' : '#000000';
-
     const color = isFocused ? theme.colors.accent : inactiveColor;
 
     switch (routeName) {
@@ -80,9 +69,40 @@ function GlassTabBar({ state, navigation }: any) {
     }
   };
 
+  const renderGlass = () => {
+    if (Platform.OS === 'ios' || Platform.OS === 'android') {
+      return (
+        <BlurView
+          style={StyleSheet.absoluteFill}
+          blurType={theme.mode === 'light' ? 'light' : 'dark'}
+          blurAmount={20}
+          reducedTransparencyFallbackColor={
+            theme.mode === 'light' 
+              ? 'rgba(255,255,255,0.9)'
+              : 'rgba(20,20,20,0.9)'
+          }
+        />
+      );
+    }
+
+    return (
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor:
+              theme.mode === 'light'
+                ? 'rgba(255,255,255,0.85)'
+                : 'rgba(20,20,20,0.85)',
+          },
+        ]}
+      />
+    );
+  };
+
   return (
     <View style={[styles.wrapper, { paddingHorizontal: sidePadding }]}>
-      {/* TAB GLASS PILL */}
+      
       <View
         style={[
           styles.container,
@@ -92,30 +112,7 @@ function GlassTabBar({ state, navigation }: any) {
           },
         ]}
       >
-        {Platform.OS === 'ios'&& 'android' ? (
-          <BlurView
-            style={styles.blur}
-            blurType={theme.mode === 'light' ? 'light' : 'dark'}
-            blurAmount={20}
-            reducedTransparencyFallbackColor={
-              theme.mode === 'light'
-                ? 'rgba(255,255,255,0.9)'
-                : 'rgba(20,20,20,0.9)'
-            }
-          />
-        ) : (
-          <View
-            style={[
-              styles.androidGlass,
-              {
-                backgroundColor:
-                  theme.mode === 'light'
-                    ? 'rgba(255,255,255,0.85)'
-                    : 'rgba(20,20,20,0.85)',
-              },
-            ]}
-          />
-        )}
+        {renderGlass()}
 
         <View
           pointerEvents="none"
@@ -171,32 +168,8 @@ function GlassTabBar({ state, navigation }: any) {
         </View>
       </View>
 
-      {/* AI BUTTON */}
       <View style={styles.aiWrapper}>
-        {Platform.OS === 'ios' && 'android'? (
-          <BlurView
-            style={styles.aiBlur}
-            blurType={theme.mode === 'light' ? 'light' : 'dark'}
-            blurAmount={20}
-            reducedTransparencyFallbackColor={
-              theme.mode === 'light'
-                ? 'rgba(255,255,255,0.9)'
-                : 'rgba(20,20,20,0.9)'
-            }
-          />
-        ) : (
-          <View
-            style={[
-              styles.aiAndroidGlass,
-              {
-                backgroundColor:
-                  theme.mode === 'light'
-                    ? 'rgba(255,255,255,0.85)'
-                    : 'rgba(20,20,20,0.85)',
-              },
-            ]}
-          />
-        )}
+        {renderGlass()}
 
         <View
           pointerEvents="none"
@@ -235,11 +208,11 @@ export default function MainTabs() {
           },
           tabBarBackground: () => null,
         }}
-        tabBar={props => <GlassTabBar {...props} />}
+        tabBar={(props) => <GlassTabBar {...props} />}
       >
         <Tab.Screen name="Home" component={FeedScreen} />
         <Tab.Screen name="Search" component={SearchScreen} />
-        <Tab.Screen name="Chat" component={ChatScreen} />
+        <Tab.Screen name="Chat" component={VideoCallScreen} />
         <Tab.Screen name="Profile" component={ProfileScreen} />
       </Tab.Navigator>
       <BottomGradient />
@@ -258,21 +231,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     zIndex: 100,
   },
-
   container: {
     height: 60,
     borderRadius: 40,
     overflow: 'hidden',
   },
-
-  blur: {
-    ...StyleSheet.absoluteFillObject,
-  },
-
-  androidGlass: {
-    ...StyleSheet.absoluteFillObject,
-  },
-
   activeSlider: {
     position: 'absolute',
     height: 50,
@@ -281,44 +244,30 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(79,209,255,0.15)',
     left: 3,
   },
-
   tabRow: {
     flexDirection: 'row',
     height: '100%',
   },
-
   tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   label: {
     fontSize: 11,
     marginTop: 2,
   },
-
   aiWrapper: {
     width: 60,
     height: 60,
     borderRadius: 30,
     overflow: 'hidden',
   },
-
-  aiBlur: {
-    ...StyleSheet.absoluteFillObject,
-  },
-
-  aiAndroidGlass: {
-    ...StyleSheet.absoluteFillObject,
-  },
-
   aiButtonContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-
   aiLabel: {
     fontSize: 10,
     marginTop: 2,
