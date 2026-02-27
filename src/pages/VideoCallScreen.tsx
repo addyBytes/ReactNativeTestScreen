@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -14,25 +14,9 @@ export default function VideoCallScreen() {
   const [roomId, setRoomId] = useState('');
   const [inCall, setInCall] = useState(false);
 
-  useEffect(() => {
-    socket.on('connect', () => {
-      console.log('Socket connected:', socket.id);
-    });
-
-    socket.on('room-created', (id: string) => {
-      console.log('Room created:', id);
-      setRoomId(id);
-      setInCall(true);
-    });
-
-    return () => {
-      socket.off('connect');
-      socket.off('room-created');
-    };
-  }, []);
-
   const createRoom = () => {
     socket.emit('create-room', (id: string) => {
+      console.log('Room created:', id);
       setRoomId(id);
       setInCall(true);
     });
@@ -40,11 +24,18 @@ export default function VideoCallScreen() {
 
   const joinRoom = () => {
     if (!roomId) return;
+
+    socket.emit('join-room', roomId);   // 🔥 THIS WAS MISSING
     setInCall(true);
   };
 
   if (inCall) {
-    return <CallScreen roomId={roomId} onEnd={() => setInCall(false)} />;
+    return (
+      <CallScreen
+        roomId={roomId}
+        onEnd={() => setInCall(false)}
+      />
+    );
   }
 
   return (

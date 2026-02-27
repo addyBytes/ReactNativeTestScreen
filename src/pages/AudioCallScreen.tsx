@@ -1,3 +1,16 @@
+//audio calling screen IT works on the concept of P2p connection via same host or stun sever ip exchange [STUN SERVER IS MIDDLE SERVER WHICH EXCHANGES IP OF BOTH DEVICES ID IF NOT CONNECTED ON SAME WIFI FOR UPD TRANSFER ] and for multiuser i have user TURN server which are the external servers which connects 3 or more devices.
+
+//I THINK The backend of audio and video crashes cuz of same socket idk not tested so check for that too
+
+
+//ALTERNATIVE FOR TURN SERVERS
+// 1.SFU (Selective Forwarding Unit) – Most Common Alternative
+// 2.MCU (Multipoint Control Unit)
+
+
+
+//SFU is better — it scales efficiently for multi-user calls with lower server load and real-time performance.
+
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
@@ -21,18 +34,29 @@ import socket from "../services/socket";
 const { width, height } = Dimensions.get("window");
 
 const configuration = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+  iceServers: [
+    { urls: "stun:stun.relay.metered.ca:80" },
+    {
+      urls: [
+        "turn:global.relay.metered.ca:80",
+        "turn:global.relay.metered.ca:80?transport=tcp",
+        "turn:global.relay.metered.ca:443",
+        "turns:global.relay.metered.ca:443?transport=tcp",
+      ],
+      username: "d071ee907289677b708cbaed",
+      credential: "B9WclnyeR1E+sG90",
+    },
+  ],
 };
 
 const EMOJIS = ["❤️", "😂", "👏", "🔥", "😮"];
 
 export default function AudioCallScreen({ route, navigation }: any) {
-  const { roomId, isCaller } = route.params;
+  const { roomId } = route.params;
 
-  const pc = useRef<RTCPeerConnection | null>(null);
+  const peers = useRef<any>({});
   const localStream = useRef<any>(null);
-
-  const lastEmojiTime = useRef<number>(0); // ⏱ anti overlap
+  const lastEmojiTime = useRef<number>(0);
 
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(false);
@@ -42,91 +66,129 @@ export default function AudioCallScreen({ route, navigation }: any) {
   useEffect(() => {
     init();
 
+    socket.on("audio-existing-users", async (users) => {
+      for (let userId of users) {
+        await createPeer(userId, true);
+      }
+    });
+
+    socket.on("audio-offer", async ({ from, offer }) => {
+      const pc = await createPeer(from, false);
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      socket.emit("audio-answer", { to: from, answer });
+    });
+
+    socket.on("audio-answer", async ({ from, answer }) => {
+      const pc = peers.current[from];
+      if (!pc) return;
+
+      if (pc.signalingState === "have-local-offer") {
+        await pc.setRemoteDescription(
+          new RTCSessionDescription(answer)
+        );
+      }
+    });
+
+    socket.on("audio-ice-candidate", async ({ from, candidate }) => {
+      const pc = peers.current[from];
+      if (pc && candidate) {
+        try {
+          await pc.addIceCandidate(
+            new RTCIceCandidate(candidate)
+          );
+        } catch {}
+      }
+    });
+
+    socket.on("audio-user-left", (userId) => {
+      if (peers.current[userId]) {
+        peers.current[userId].close();
+        delete peers.current[userId];
+      }
+    });
+
     socket.on("emoji-reaction", ({ emoji }) => {
       triggerFloatingEmoji(emoji);
     });
 
-    return () => {
-      cleanup();
-      socket.off("emoji-reaction");
-    };
+    return () => cleanup();
   }, []);
 
   const init = async () => {
-    await startAudio();
-    socket.emit("join-audio-room", roomId);
-
-    socket.on("audio-user-joined", async () => {
-      if (isCaller) await createOffer();
-    });
-
-    socket.on("audio-offer", async ({ offer }) => {
-      if (!offer) return;
-
-      await pc.current?.setRemoteDescription(
-        new RTCSessionDescription(offer)
-      );
-
-      const answer = await pc.current?.createAnswer();
-      if (!answer) return;
-
-      await pc.current?.setLocalDescription(answer);
-      socket.emit("audio-answer", { roomId, answer });
-    });
-
-    socket.on("audio-answer", async ({ answer }) => {
-      if (!answer) return;
-
-      await pc.current?.setRemoteDescription(
-        new RTCSessionDescription(answer)
-      );
-    });
-
-    socket.on("audio-ice-candidate", async ({ candidate }) => {
-      if (!candidate) return;
-      try {
-        await pc.current?.addIceCandidate(
-          new RTCIceCandidate(candidate)
-        );
-      } catch {}
-    });
-  };
-
-  const startAudio = async () => {
-    const granted = await PermissionsAndroid.request(
+    await PermissionsAndroid.request(
       PermissionsAndroid.PERMISSIONS.RECORD_AUDIO
     );
-    if (granted !== PermissionsAndroid.RESULTS.GRANTED) return;
 
     InCallManager.start({ media: "audio" });
-    InCallManager.setForceSpeakerphoneOn(false);
 
     localStream.current = await mediaDevices.getUserMedia({
       audio: true,
       video: false,
     });
 
-    pc.current = new RTCPeerConnection(configuration);
+    socket.emit("join-audio-room", roomId);
+  };
 
-    pc.current.onicecandidate = (event) => {
+  const createPeer = async (
+    userId: string,
+    initiator: boolean
+  ) => {
+    if (peers.current[userId]) return peers.current[userId];
+
+    const pc = new RTCPeerConnection(configuration);
+    peers.current[userId] = pc;
+
+    localStream.current.getTracks().forEach((track: any) => {
+      pc.addTrack(track, localStream.current);
+    });
+
+    pc.oniceconnectionstatechange = () => {
+      console.log(
+        "ICE STATE WITH",
+        userId,
+        ":",
+        pc.iceConnectionState
+      );
+    };
+
+    pc.onconnectionstatechange = () => {
+      console.log(
+        "CONNECTION STATE WITH",
+        userId,
+        ":",
+        pc.connectionState
+      );
+    };
+
+    pc.onicecandidate = (event) => {
       if (event.candidate) {
+        console.log(
+          "CANDIDATE:",
+          event.candidate.candidate
+        );
+
         socket.emit("audio-ice-candidate", {
-          roomId,
+          to: userId,
           candidate: event.candidate,
         });
       }
     };
 
-    localStream.current.getTracks().forEach((track: any) => {
-      pc.current?.addTrack(track, localStream.current);
-    });
-  };
+    if (initiator) {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
 
-  const createOffer = async () => {
-    if (!pc.current) return;
-    const offer = await pc.current.createOffer();
-    await pc.current.setLocalDescription(offer);
-    socket.emit("audio-offer", { roomId, offer });
+      socket.emit("audio-offer", {
+        to: userId,
+        offer,
+      });
+    }
+
+    return pc;
   };
 
   const toggleMute = () => {
@@ -142,11 +204,10 @@ export default function AudioCallScreen({ route, navigation }: any) {
     InCallManager.setForceSpeakerphoneOn(newState);
   };
 
-  // 🔥 EMOJI SEND WITH 500ms DELAY CONTROL
   const sendEmoji = (emoji: string) => {
     const now = Date.now();
+    if (now - lastEmojiTime.current < 500) return;
 
-    if (now - lastEmojiTime.current < 500) return; // prevent spam overlap
     lastEmojiTime.current = now;
 
     triggerFloatingEmoji(emoji);
@@ -155,7 +216,6 @@ export default function AudioCallScreen({ route, navigation }: any) {
     setShowEmojiPicker(false);
   };
 
-  // 🔥 ADVANCED FLOATING ANIMATION
   const triggerFloatingEmoji = (emoji: string) => {
     const id = Date.now() + Math.random();
 
@@ -186,9 +246,15 @@ export default function AudioCallScreen({ route, navigation }: any) {
   };
 
   const cleanup = () => {
-    pc.current?.close();
-    pc.current = null;
-    localStream.current?.getTracks().forEach((t: any) => t.stop());
+    Object.values(peers.current).forEach((pc: any) =>
+      pc.close()
+    );
+    peers.current = {};
+
+    localStream.current?.getTracks().forEach((t: any) =>
+      t.stop()
+    );
+
     InCallManager.stop();
   };
 
@@ -200,9 +266,10 @@ export default function AudioCallScreen({ route, navigation }: any) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Audio Call Room: {roomId}</Text>
+      <Text style={styles.title}>
+        Audio Call Room: {roomId}
+      </Text>
 
-      {/* Floating Emojis */}
       {floatingEmojis.map((item) => (
         <Animated.Text
           key={item.id}
@@ -221,7 +288,6 @@ export default function AudioCallScreen({ route, navigation }: any) {
         </Animated.Text>
       ))}
 
-      {/* Emoji Picker */}
       {showEmojiPicker && (
         <View style={styles.emojiPicker}>
           {EMOJIS.map((emoji) => (
@@ -246,9 +312,15 @@ export default function AudioCallScreen({ route, navigation }: any) {
         />
         <Button
           title="😊"
-          onPress={() => setShowEmojiPicker(!showEmojiPicker)}
+          onPress={() =>
+            setShowEmojiPicker(!showEmojiPicker)
+          }
         />
-        <Button title="End Call" color="red" onPress={endCall} />
+        <Button
+          title="End Call"
+          color="red"
+          onPress={endCall}
+        />
       </View>
     </View>
   );
