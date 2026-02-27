@@ -21,6 +21,7 @@ import { useTheme } from '../theme/ThemeContext';
 import BottomGradient from './BottomGradient';
 import VideoCallScreen from '../pages/VideoCallScreen';
 import CallScreen from '../pages/CallScreen';
+import AudioScreen from '../pages/AudioScreen';
 
 const Tab = createBottomTabNavigator();
 const { width } = Dimensions.get('window');
@@ -213,7 +214,7 @@ export default function MainTabs() {
         <Tab.Screen name="Home" component={FeedScreen} />
         <Tab.Screen name="Search" component={SearchScreen} />
         <Tab.Screen name="Chat" component={VideoCallScreen} />
-        <Tab.Screen name="Profile" component={ProfileScreen} />
+        <Tab.Screen name="Profile" component={AudioScreen} />
       </Tab.Navigator>
       <BottomGradient />
     </>
