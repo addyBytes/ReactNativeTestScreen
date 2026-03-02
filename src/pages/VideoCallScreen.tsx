@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -6,33 +6,17 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
-} from 'react-native';
-import socket from '../services/socket';
-import CallScreen from './CallScreen';
+} from "react-native";
+import CallScreen from "./CallScreen";
 
 export default function VideoCallScreen() {
-  const [roomId, setRoomId] = useState('');
+  const [roomName, setRoomName] = useState("");
   const [inCall, setInCall] = useState(false);
-
-  const createRoom = () => {
-    socket.emit('create-room', (id: string) => {
-      console.log('Room created:', id);
-      setRoomId(id);
-      setInCall(true);
-    });
-  };
-
-  const joinRoom = () => {
-    if (!roomId) return;
-
-    socket.emit('join-room', roomId);   // 🔥 THIS WAS MISSING
-    setInCall(true);
-  };
 
   if (inCall) {
     return (
       <CallScreen
-        roomId={roomId}
+        roomName={roomName}
         onEnd={() => setInCall(false)}
       />
     );
@@ -40,20 +24,19 @@ export default function VideoCallScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Video Call</Text>
+      <Text style={styles.title}>LiveKit Video Call</Text>
 
       <TextInput
-        placeholder="Enter Room ID"
-        value={roomId}
-        onChangeText={setRoomId}
+        placeholder="Enter Room Name"
+        value={roomName}
+        onChangeText={setRoomName}
         style={styles.input}
       />
 
-      <TouchableOpacity style={styles.button} onPress={createRoom}>
-        <Text style={styles.buttonText}>Create Room</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.button} onPress={joinRoom}>
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => setInCall(true)}
+      >
         <Text style={styles.buttonText}>Join Room</Text>
       </TouchableOpacity>
     </SafeAreaView>
@@ -61,8 +44,8 @@ export default function VideoCallScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 20 },
-  title: { fontSize: 24, textAlign: 'center', marginBottom: 30 },
+  container: { flex: 1, justifyContent: "center", padding: 20 },
+  title: { fontSize: 24, textAlign: "center", marginBottom: 30 },
   input: {
     borderWidth: 1,
     padding: 15,
@@ -70,14 +53,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   button: {
-    backgroundColor: '#2e7dff',
+    backgroundColor: "#2e7dff",
     padding: 15,
     borderRadius: 10,
-    marginBottom: 15,
   },
   buttonText: {
-    color: 'white',
-    textAlign: 'center',
-    fontWeight: 'bold',
+    color: "white",
+    textAlign: "center",
+    fontWeight: "bold",
   },
 });
