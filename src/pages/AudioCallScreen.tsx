@@ -43,8 +43,8 @@ const configuration = {
         "turn:global.relay.metered.ca:443",
         "turns:global.relay.metered.ca:443?transport=tcp",
       ],
-      username: "d071ee907289677b708cbaed",
-      credential: "B9WclnyeR1E+sG90",
+      username: "",
+      credential: "",
     },
   ],
 };
